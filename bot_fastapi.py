@@ -6,6 +6,21 @@ import json
 
 app = FastAPI()
 
+# Carrega os dados ao iniciar o app
+def carregar_dados():
+    global saldo_total, entradas, saidas, dividas
+    try:
+        with open("dados.json", "r") as f:
+            dados = json.load(f)
+            saldo_total = dados.get("saldo_total", 0)
+            entradas = dados.get("entradas", {})
+            saidas = dados.get("saidas", {})
+            dividas = dados.get("dividas", {})
+    except FileNotFoundError:
+        pass
+
+carregar_dados()
+
 # Token do bot (pega da variável de ambiente)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
@@ -30,18 +45,6 @@ def salvar_dados():
     }
     with open(ARQUIVO_DADOS, "w") as f:
         json.dump(dados, f)
-
-def carregar_dados():
-    global saldo_total, entradas, saidas, dividas
-    try:
-        with open(ARQUIVO_DADOS, "r") as f:
-            dados = json.load(f)
-            saldo_total = dados.get("saldo_total", 0)
-            entradas = dados.get("entradas", {})
-            saidas = dados.get("saidas", {})
-            dividas = dados.get("dividas", {})
-    except FileNotFoundError:
-        pass
 
 # =================== COMANDOS ===================
 
@@ -181,7 +184,5 @@ async def webhook(request: Request):
     return {"ok": True}
 
 if __name__ == "__main__":
-    carregar_dados()
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=10000)
-
