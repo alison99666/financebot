@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Request
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 )
 import json
 import os
+
+# Pega o token da variável de ambiente
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 ARQUIVO_DADOS = "dados.json"
 
@@ -167,38 +169,28 @@ async def divida_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Dívida não encontrada.")
 
-# =========== FASTAPI + WEBHOOK ===========
+# =================== MAIN ===================
 
-from telegram.ext import Application
+def main():
+    carregar_dados()
 
-app = FastAPI()
+    app = ApplicationBuilder().token(TOKEN).build()
 
-TOKEN = 'COLOQUE_SEU_TOKEN_AQUI'  # <=== Troque aqui pelo token do seu bot Telegram
+    # Botões
+    app.add_handler(CallbackQueryHandler(button_handler))
 
-bot = Bot(token=TOKEN)
-application = Application.builder().token(TOKEN).build()
+    # Comandos
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("menu", mostrar_menu))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("saldo", saldo))
+    app.add_handler(CommandHandler("entrada", entrada))
+    app.add_handler(CommandHandler("saida", saida))
+    app.add_handler(CommandHandler("divida_add", divida_add))
+    app.add_handler(CommandHandler("divida_list", divida_list))
+    app.add_handler(CommandHandler("divida_remove", divida_remove))
 
-# Adicionar handlers
-application.add_handler(CallbackQueryHandler(button_handler))
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("menu", mostrar_menu))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("saldo", saldo))
-application.add_handler(CommandHandler("entrada", entrada))
-application.add_handler(CommandHandler("saida", saida))
-application.add_handler(CommandHandler("divida_add", divida_add))
-application.add_handler(CommandHandler("divida_list", divida_list))
-application.add_handler(CommandHandler("divida_remove", divida_remove))
+    app.run_polling()
 
-carregar_dados()
-
-@app.post("/webhook")
-async def telegram_webhook(request: Request):
-    json_data = await request.json()
-    update = Update.de_json(json_data, bot)
-    await application.update_queue.put(update)
-    return {"ok": True}
-
-@app.get("/")
-async def root():
-    return {"message": "Bot rodando!"}
+if __name__ == '__main__':
+    main()
