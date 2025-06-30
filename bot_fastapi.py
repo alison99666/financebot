@@ -1,27 +1,14 @@
 from fastapi import FastAPI, Request
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+)
 import os
 import json
 
 app = FastAPI()
 
-# Carrega os dados ao iniciar o app
-def carregar_dados():
-    global saldo_total, entradas, saidas, dividas
-    try:
-        with open("dados.json", "r") as f:
-            dados = json.load(f)
-            saldo_total = dados.get("saldo_total", 0)
-            entradas = dados.get("entradas", {})
-            saidas = dados.get("saidas", {})
-            dividas = dados.get("dividas", {})
-    except FileNotFoundError:
-        pass
-
-carregar_dados()
-
-# Token do bot (pega da variável de ambiente)
+# Token do bot
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
     raise ValueError("A variável de ambiente TELEGRAM_TOKEN não está definida.")
@@ -46,7 +33,21 @@ def salvar_dados():
     with open(ARQUIVO_DADOS, "w") as f:
         json.dump(dados, f)
 
-# =================== COMANDOS ===================
+def carregar_dados():
+    global saldo_total, entradas, saidas, dividas
+    try:
+        with open(ARQUIVO_DADOS, "r") as f:
+            dados = json.load(f)
+            saldo_total = dados.get("saldo_total", 0)
+            entradas = dados.get("entradas", {})
+            saidas = dados.get("saidas", {})
+            dividas = dados.get("dividas", {})
+    except FileNotFoundError:
+        pass
+
+carregar_dados()
+
+# =================== Comandos ===================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mostrar_menu(update)
@@ -164,7 +165,7 @@ async def divida_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Dívida não encontrada.")
 
-# =================== Handlers e Webhook ===================
+# =================== Handlers ===================
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("menu", mostrar_menu))
@@ -176,12 +177,26 @@ application.add_handler(CommandHandler("divida_list", divida_list))
 application.add_handler(CommandHandler("divida_remove", divida_remove))
 application.add_handler(CallbackQueryHandler(button_handler))
 
+# ============ Eventos FastAPI para iniciar e parar o bot ============
+
+@app.on_event("startup")
+async def on_startup():
+    await application.initialize()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await application.shutdown()
+
+# =================== Webhook ===================
+
 @app.post("/webhook")
 async def webhook(request: Request):
     data = await request.json()
     update = Update.de_json(data, bot)
     await application.process_update(update)
     return {"ok": True}
+
+# =================== Rodar localmente (se quiser) ===================
 
 if __name__ == "__main__":
     import uvicorn
