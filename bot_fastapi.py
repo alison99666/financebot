@@ -8,7 +8,6 @@ import json
 
 app = FastAPI()
 
-# Token do bot
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
     raise ValueError("A variável de ambiente TELEGRAM_TOKEN não está definida.")
@@ -177,15 +176,17 @@ application.add_handler(CommandHandler("divida_list", divida_list))
 application.add_handler(CommandHandler("divida_remove", divida_remove))
 application.add_handler(CallbackQueryHandler(button_handler))
 
-# ============ Eventos FastAPI para iniciar e parar o bot ============
+# ============ Eventos FastAPI para iniciar e parar bot ============
 
 @app.on_event("startup")
 async def on_startup():
+    await bot.initialize()
     await application.initialize()
 
 @app.on_event("shutdown")
 async def on_shutdown():
     await application.shutdown()
+    await bot.shutdown()
 
 # =================== Webhook ===================
 
@@ -196,7 +197,7 @@ async def webhook(request: Request):
     await application.process_update(update)
     return {"ok": True}
 
-# =================== Rodar localmente (se quiser) ===================
+# =================== Rodar localmente ===================
 
 if __name__ == "__main__":
     import uvicorn
