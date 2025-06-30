@@ -1,12 +1,18 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-)
-import json
+from fastapi import FastAPI, Request
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import os
+import json
 
-# Pega o token da variável de ambiente
+app = FastAPI()
+
+# Token do bot (pega da variável de ambiente)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+if not TOKEN:
+    raise ValueError("A variável de ambiente TELEGRAM_TOKEN não está definida.")
+
+bot = Bot(token=TOKEN)
+application = ApplicationBuilder().token(TOKEN).build()
 
 ARQUIVO_DADOS = "dados.json"
 
@@ -27,15 +33,17 @@ def salvar_dados():
 
 def carregar_dados():
     global saldo_total, entradas, saidas, dividas
-    if os.path.exists(ARQUIVO_DADOS):
+    try:
         with open(ARQUIVO_DADOS, "r") as f:
             dados = json.load(f)
             saldo_total = dados.get("saldo_total", 0)
             entradas = dados.get("entradas", {})
             saidas = dados.get("saidas", {})
             dividas = dados.get("dividas", {})
+    except FileNotFoundError:
+        pass
 
-# =================== BOTÕES ===================
+# =================== COMANDOS ===================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mostrar_menu(update)
@@ -53,8 +61,6 @@ async def mostrar_menu(update: Update):
         await update.message.reply_text("📱 Escolha uma opção:", reply_markup=reply_markup)
     elif update.callback_query:
         await update.callback_query.edit_message_text("📱 Escolha uma opção:", reply_markup=reply_markup)
-
-# =================== AÇÕES ===================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -80,20 +86,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(texto)
         else:
             await query.message.reply_text("✅ Nenhuma dívida cadastrada.")
-
-# =================== COMANDOS DE TEXTO ===================
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto = (
-        "/menu - Mostrar menu com botões\n"
-        "/saldo - Mostrar saldo\n"
-        "/entrada nome valor - Adicionar entrada\n"
-        "/saida nome valor - Adicionar saída\n"
-        "/divida_add nome valor - Adicionar dívida\n"
-        "/divida_list - Listar dívidas\n"
-        "/divida_remove nome - Remover dívida\n"
-    )
-    await update.message.reply_text(texto)
 
 async def saldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Saldo total: R$ {saldo_total:.2f}")
@@ -169,28 +161,27 @@ async def divida_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Dívida não encontrada.")
 
-# =================== MAIN ===================
+# =================== Handlers e Webhook ===================
 
-def main():
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("menu", mostrar_menu))
+application.add_handler(CommandHandler("saldo", saldo))
+application.add_handler(CommandHandler("entrada", entrada))
+application.add_handler(CommandHandler("saida", saida))
+application.add_handler(CommandHandler("divida_add", divida_add))
+application.add_handler(CommandHandler("divida_list", divida_list))
+application.add_handler(CommandHandler("divida_remove", divida_remove))
+application.add_handler(CallbackQueryHandler(button_handler))
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, bot)
+    await application.process_update(update)
+    return {"ok": True}
+
+if __name__ == "__main__":
     carregar_dados()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=10000)
 
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    # Botões
-    app.add_handler(CallbackQueryHandler(button_handler))
-
-    # Comandos
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("menu", mostrar_menu))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("saldo", saldo))
-    app.add_handler(CommandHandler("entrada", entrada))
-    app.add_handler(CommandHandler("saida", saida))
-    app.add_handler(CommandHandler("divida_add", divida_add))
-    app.add_handler(CommandHandler("divida_list", divida_list))
-    app.add_handler(CommandHandler("divida_remove", divida_remove))
-
-    app.run_polling()
-
-if __name__ == '__main__':
-    main()
